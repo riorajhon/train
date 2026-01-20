@@ -122,7 +122,17 @@ def load_and_prepare_data(csv_file, test_size=0.2):
     print("Loading dataset...")
     data = pd.read_csv(csv_file)
     
-    print(f"Total examples: {len(data):,}")
+    print(f"Total examples loaded: {len(data):,}")
+    
+    # Remove rows with NaN values in critical columns
+    initial_count = len(data)
+    data = data.dropna(subset=['original_name', 'variation'])
+    final_count = len(data)
+    
+    if initial_count != final_count:
+        print(f"Removed {initial_count - final_count} rows with missing values")
+    
+    print(f"Total examples after cleaning: {len(data):,}")
     
     # Show category distribution
     category_counts = data['similarity_category'].value_counts()
