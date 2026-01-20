@@ -22,6 +22,7 @@ class NameGeneratorLSTM(nn.Module):
         return output, hidden
 
 class NameVariationGenerator:
+    # def __init__(self, model_path='test_model.pth', vocab_path='test_vocabulary.pth'):
     def __init__(self, model_path='best_name_generator.pth', vocab_path='vocabulary.pth'):
         # Load vocabulary
         vocab_data = torch.load(vocab_path, map_location='cpu')
@@ -39,7 +40,7 @@ class NameVariationGenerator:
         
         # Load model
         vocab_size = len(self.vocab)
-        self.model = NameGeneratorLSTM(vocab_size, embed_dim=32, hidden_dim=64, num_layers=1)
+        self.model = NameGeneratorLSTM(vocab_size, embed_dim=32, hidden_dim=64, num_layers=2)
         self.model.load_state_dict(torch.load(model_path, map_location='cpu'))
         self.model.eval()
         

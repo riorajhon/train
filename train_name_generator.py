@@ -265,7 +265,7 @@ def main():
     
     # Create model
     vocab_size = len(vocab)
-    model = NameGeneratorLSTM(vocab_size, embed_dim=32, hidden_dim=64, num_layers=1)
+    model = NameGeneratorLSTM(vocab_size, embed_dim=32, hidden_dim=64, num_layers=2)  # 2 layers for better learning
     
     print(f"\nModel parameters: {sum(p.numel() for p in model.parameters()):,}")
     
@@ -278,7 +278,7 @@ def main():
     }, 'vocabulary.pth')
     
     # Train model
-    train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.001)
+    train_model(model, train_loader, val_loader, num_epochs=30, learning_rate=0.001)
     
     print("\n✅ Training completed!")
     print("Files saved:")
