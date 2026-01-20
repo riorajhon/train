@@ -46,52 +46,70 @@ class NameVariationGenerator:
         print("✅ Name variation generator loaded successfully!")
         print(f"Vocabulary size: {vocab_size}")
     
-    def generate_variation(self, original_name, similarity_category, temperature=0.8):
+    def generate_variation(self, original_name, similarity_category, temperature=1.0, max_attempts=5):
         """Generate a single name variation."""
-        # Prepare input
-        category_token = self.category_tokens[similarity_category]
-        input_text = original_name.lower() + category_token
+        for attempt in range(max_attempts):
+            # Prepare input
+            category_token = self.category_tokens[similarity_category]
+            input_text = original_name.lower() + category_token
+            
+            # Convert to indices
+            input_indices = [self.char_to_idx.get(c, self.char_to_idx['<UNK>']) for c in input_text]
+            input_indices = [self.char_to_idx['<START>']] + input_indices
+            
+            # Generate variation
+            with torch.no_grad():
+                generated = []
+                input_tensor = torch.tensor([input_indices])
+                hidden = None
+                
+                # Get initial context from input
+                output, hidden = self.model(input_tensor, hidden)
+                
+                # Start generation with START token
+                current_input = torch.tensor([[self.char_to_idx['<START>']]])
+                
+                for step in range(self.max_length - 5):  # Leave room for longer names
+                    output, hidden = self.model(current_input, hidden)
+                    
+                    # Get last output
+                    last_output = output[0, -1, :]
+                    
+                    # Apply temperature for more diverse sampling
+                    if temperature > 0:
+                        last_output = last_output / temperature
+                        probabilities = torch.softmax(last_output, dim=0)
+                        
+                        # Sample next character (avoid always picking the most likely)
+                        next_char_idx = torch.multinomial(probabilities, 1).item()
+                    else:
+                        # Greedy sampling
+                        next_char_idx = torch.argmax(last_output).item()
+                    
+                    # Check for end token
+                    if next_char_idx == self.char_to_idx['<END>']:
+                        break
+                    
+                    # Skip special tokens in output
+                    if next_char_idx not in [self.char_to_idx['<PAD>'], self.char_to_idx['<START>']]:
+                        next_char = self.idx_to_char[next_char_idx]
+                        if not next_char.startswith('['):  # Skip category tokens
+                            generated.append(next_char)
+                    
+                    # Prepare next input
+                    current_input = torch.tensor([[next_char_idx]])
+                
+                result = ''.join(generated).strip()
+                
+                # Return if we got a valid result that's different from input
+                if result and result != original_name.lower():
+                    return result
+                
+                # Try with different temperature
+                temperature += 0.2
         
-        # Convert to indices
-        input_indices = [self.char_to_idx.get(c, self.char_to_idx['<UNK>']) for c in input_text]
-        input_indices = [self.char_to_idx['<START>']] + input_indices
-        
-        # Generate variation
-        with torch.no_grad():
-            generated = []
-            input_tensor = torch.tensor([input_indices])
-            hidden = None
-            
-            # Start generation
-            current_input = input_tensor
-            
-            for _ in range(self.max_length):
-                output, hidden = self.model(current_input, hidden)
-                
-                # Get last output
-                last_output = output[0, -1, :]
-                
-                # Apply temperature
-                last_output = last_output / temperature
-                probabilities = torch.softmax(last_output, dim=0)
-                
-                # Sample next character
-                next_char_idx = torch.multinomial(probabilities, 1).item()
-                
-                # Check for end token
-                if next_char_idx == self.char_to_idx['<END>']:
-                    break
-                
-                # Skip special tokens in output
-                if next_char_idx not in [self.char_to_idx['<PAD>'], self.char_to_idx['<START>']]:
-                    next_char = self.idx_to_char[next_char_idx]
-                    if not next_char.startswith('['):  # Skip category tokens
-                        generated.append(next_char)
-                
-                # Prepare next input
-                current_input = torch.tensor([[next_char_idx]])
-            
-            return ''.join(generated)
+        # Fallback: return a simple variation
+        return original_name.lower() + "e"
     
     def generate_distribution(self, original_name, distribution=None):
         """Generate variations according to specified distribution."""

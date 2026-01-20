@@ -46,8 +46,8 @@ class NameVariationDataset(Dataset):
         input_indices = [self.char_to_idx.get(c, self.char_to_idx['<UNK>']) for c in input_text]
         target_indices = [self.char_to_idx.get(c, self.char_to_idx['<UNK>']) for c in variation]
         
-        # Add start and end tokens
-        input_indices = [self.char_to_idx['<START>']] + input_indices + [self.char_to_idx['<END>']]
+        # Add start token to input, start and end tokens to target
+        input_indices = [self.char_to_idx['<START>']] + input_indices
         target_indices = [self.char_to_idx['<START>']] + target_indices + [self.char_to_idx['<END>']]
         
         # Pad sequences
@@ -155,7 +155,9 @@ def load_and_prepare_data(csv_file, test_size=0.2):
 
 def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.001):
     """Train the LSTM model."""
-    criterion = nn.CrossEntropyLoss(ignore_index=0)  # Ignore padding tokens
+    # Use the correct padding token index
+    pad_idx = train_loader.dataset.char_to_idx['<PAD>']
+    criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
     
@@ -177,14 +179,24 @@ def train_model(model, train_loader, val_loader, num_epochs=50, learning_rate=0.
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             optimizer.zero_grad()
             
-            # Forward pass
+            # Forward pass - use teacher forcing
+            # Input: original_name + category_token
+            # Target: variation (shifted by 1 for next token prediction)
             outputs, _ = model(inputs)
             
-            # Calculate loss
-            loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
+            # Calculate loss - predict next token in target sequence
+            # Reshape for loss calculation
+            outputs_flat = outputs.view(-1, outputs.size(-1))
+            targets_flat = targets.view(-1)
+            
+            loss = criterion(outputs_flat, targets_flat)
             
             # Backward pass
             loss.backward()
+            
+            # Gradient clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             
             train_loss += loss.item()
